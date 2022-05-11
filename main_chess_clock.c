@@ -158,6 +158,21 @@ void lcd_str(const char* str)
  }  
 }
 
+unsigned int adc(unsigned char kanal)
+{
+    switch(kanal)
+    {
+        case 0: ADCON0=0x01; break; //P1
+        case 1: ADCON0=0x05; break; //P2
+        case 2: ADCON0=0x09; break; 
+    }
+    
+    ADCON0bits.GO=1;
+    while(ADCON0bits.GO == 1);
+
+   return ((((unsigned int)ADRESH)<<2)|(ADRESL>>6));
+}
+
 void main(void) {
     
     ADCON0=0x01;
@@ -178,60 +193,105 @@ void main(void) {
     unsigned int player_1_time = 300;
     unsigned int player_2_time = 300; // 300s 5M, 180s 3M, 60s 1M
     unsigned int mode_counter = 0; // 5, 3, 1 = 0,1,2
-    bool is_player_1 = false; // boolean type provided by stdbool.h
     
+    bool is_player_1 = false; // boolean type provided by stdbool.h
+    bool is_active = false;
+    bool dot_side = false;
+    
+    unsigned int tmp = 0;
+    unsigned int prev = 0;
+        
     delay(1000);
     lcd_cmd(L_CLR);
     lcd_cmd(L_L1); //Ustawienie karetki w pierwszej linii
-    lcd_str(" RB0 to set time "); //napis
+    lcd_str(" Use Potent. P2  "); //napis
+    lcd_cmd(L_L2);
+    lcd_str("  To set time  ");
     delay(3000);
     lcd_cmd(L_CLR);
     
     while(1)
     {
         delay(1000); // 1s delay
-        if(!PORTBbits.RB0)
+        tmp = ((unsigned int)adc(1) / 10); // get value from P2 potentiometer
+        
+        if(!is_active)
         {
-            switch(mode_counter)
+            if(tmp > 66 && tmp != prev)
             {
-                case 0:
-                    player_1_time = 300;
-                    player_2_time = 300;
-                    mode_counter++;
-                    break;
-                case 1:
-                    player_1_time = 180;
-                    player_2_time = 180;
-                    mode_counter++;
-                    break;
-                case 2:
-                    player_1_time = 60;
-                    player_2_time = 60;
-                    mode_counter = 0;
-                    break;
-                default:
-                    mode_counter = 0; // if mode counter is out of bounds, reset
-                    break;
+               prev = tmp;
+               player_1_time = 60;
+               player_2_time = 60;
+               lcd_cmd(L_CLR);
+               lcd_cmd(L_L1); //Ustawienie karetki w pierwszej linii
+               lcd_str("1 Minute time"); //napis
+               lcd_cmd(L_L2);
+               lcd_str("mode selected");
+               delay(2000);
             }
+            else if(tmp > 33 && tmp != prev)
+            {
+                prev = tmp;
+                player_1_time = 180;
+                player_2_time = 180;
+                lcd_cmd(L_CLR);
+                lcd_cmd(L_L1); //Ustawienie karetki w pierwszej linii
+                lcd_str("3 Minute time"); //napis
+                lcd_cmd(L_L2);
+                lcd_str("mode selected");
+                delay(2000);
+            }
+            else if(tmp < 33 && tmp != prev)
+            {
+                prev = tmp;
+                player_1_time = 300;
+                player_2_time = 300;
+                lcd_cmd(L_CLR);
+                lcd_cmd(L_L1); //Ustawienie karetki w pierwszej linii
+                lcd_str("5 Minute time"); //napis
+                lcd_cmd(L_L2);
+                lcd_str("mode selected");
+                delay(2000);
+            } 
         }
         
-        if(!PORTBbits.RB1)
+        
+        if(!PORTBbits.RB5)
         {
             is_player_1 = true; //activate P1 time
+            is_active = true;
         }
         
-        if(!PORTBbits.RB2)
+        if(!PORTBbits.RB3)
         {
             is_player_1 = false; // activate P2 time
+            is_active = true;
         }
         
-        if(is_player_1)
+        if(is_player_1 && is_active)
         {
             player_1_time--;
         }
-        else
+        else if(is_active)
         {
             player_2_time--;
+        }
+        
+        if(player_1_time == 0)
+        {
+            lcd_cmd(L_CLR);
+            lcd_cmd(L_L1);
+            lcd_str("P2 Win By Time!");
+            delay(15000);
+            return;
+        }
+        if(player_2_time == 0)
+        {
+            lcd_cmd(L_CLR);
+            lcd_cmd(L_L1);
+            lcd_str("P1 Win By Time!");
+            delay(15000);
+            return;
         }
         
         
@@ -241,22 +301,36 @@ void main(void) {
         int p2_minutes = player_2_time / 60;
         int p2_seconds = player_2_time - (p2_minutes * 60);
         
-        char player_1_display[] = "P1:             ";
-        player_1_display[12] = p1_minutes - (p1_minutes / 10 * 10) + '0';
-        player_1_display[13] = ':';
-        player_1_display[14] = p1_seconds/10 + '0';
-        player_1_display[15] = p1_seconds - (p1_seconds / 10 * 10) + '0';
+        char name_display[] = "    P1    P2    ";
         
-        char player_2_display[] = "P2:             ";
-        player_2_display[12] = p2_minutes - (p2_minutes / 10 * 10) + '0';
-        player_2_display[13] = ':';
-        player_2_display[14] = p2_seconds/10 + '0';
-        player_2_display[15] = p2_seconds - (p2_seconds / 10 * 10) + '0';
+        char time_display[] = "                ";
+        time_display[3] = p1_minutes - (p1_minutes / 10 * 10) + '0';
+        time_display[4] = ':';
+        time_display[5] = p1_seconds/10 + '0';
+        time_display[6] = p1_seconds - (p1_seconds / 10 * 10) + '0';
+        
+        time_display[9] = p2_minutes - (p2_minutes / 10 * 10) + '0';
+        time_display[10] = ':';
+        time_display[11] = p2_seconds/10 + '0';
+        time_display[12] = p2_seconds - (p2_seconds / 10 * 10) + '0';
+        
+        if(dot_side && is_active)
+        {
+            name_display[0] = '#';
+            dot_side = !dot_side;
+        }
+        else
+        {
+            if(is_active)
+            {
+                name_display[15] = '#';
+                dot_side = !dot_side;  
+            }
+        }
         
         lcd_cmd(L_L1);
-        lcd_str(player_1_display);
+        lcd_str(name_display);
         lcd_cmd(L_L2);
-        lcd_str(player_2_display);
+        lcd_str(time_display);
     }
-    return;
 }
