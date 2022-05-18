@@ -173,6 +173,81 @@ unsigned int adc(unsigned char kanal)
    return ((((unsigned int)ADRESH)<<2)|(ADRESL>>6));
 }
 
+bool win_display(bool is_player1)
+{
+    unsigned int i;
+    bool line_flip = true;
+    
+    if(is_player1)
+    {
+        for(i=0; i < 15; i++)
+        {
+            lcd_cmd(L_CLR);
+            if(line_flip)
+            {
+                
+                lcd_cmd(L_L1);
+                lcd_str("P1      By      ");
+                lcd_cmd(L_L2);
+                lcd_str("    Win    Time!");
+                line_flip = !line_flip;
+            }
+            else
+            {
+                lcd_cmd(L_L1);
+                lcd_str("    Win    Time!");  
+                lcd_cmd(L_L2);
+                lcd_str("P1      By      ");  
+                line_flip = !line_flip;
+            }
+            delay(1000);
+        }
+        return false;
+    }
+    for(i=0; i < 15; i++)
+    {
+        lcd_cmd(L_CLR);
+        if(line_flip)
+        {
+
+            lcd_cmd(L_L1);
+            lcd_str("P2      By      ");
+            lcd_cmd(L_L2);
+            lcd_str("    Win    Time!"); 
+            line_flip = !line_flip;
+        }
+        else
+        {
+            lcd_cmd(L_L1);
+            lcd_str("    Win    Time!");  
+            lcd_cmd(L_L2);
+            lcd_str("P2      By      ");   
+            line_flip = !line_flip;
+        }
+        delay(1000);
+    }
+    return false;
+}
+
+void time_display_update(char* array, unsigned int p_1_t, unsigned int p_2_t)
+{
+    unsigned int p1_minutes = p_1_t / 60;
+    unsigned int p1_seconds = p_1_t - (p1_minutes * 60);
+
+    unsigned int p2_minutes = p_2_t / 60;
+    unsigned int p2_seconds = p_2_t - (p2_minutes * 60);
+    
+    array[3] = p1_minutes - (p1_minutes / 10 * 10) + '0';
+    array[4] = ':';
+    array[5] = p1_seconds/10 + '0';
+    array[6] = p1_seconds - (p1_seconds / 10 * 10) + '0';
+
+    array[9] = p2_minutes - (p2_minutes / 10 * 10) + '0';
+    array[10] = ':';
+    array[11] = p2_seconds/10 + '0';
+    array[12] = p2_seconds - (p2_seconds / 10 * 10) + '0';
+}
+
 void main(void) {
     
     ADCON0=0x01;
@@ -255,11 +330,12 @@ void main(void) {
             } 
         }
         
-        
-        if(!PORTBbits.RB5)
+        // press and hold might be required due to how PicGenios board works
+        // alternatively might be due to delay(1000) being called on first thing
+        if(!PORTBbits.RB5) 
         {
             is_player_1 = true; //activate P1 time
-            is_active = true;
+            is_active = true; // disable potent. value check during runtime
         }
         
         if(!PORTBbits.RB3)
@@ -279,52 +355,38 @@ void main(void) {
         
         if(player_1_time == 0)
         {
-            lcd_cmd(L_CLR);
-            lcd_cmd(L_L1);
-            lcd_str("P2 Win By Time!");
-            delay(15000);
+            is_active = win_display(false); // reset is_active so potentiometer can be used
             return;
         }
         if(player_2_time == 0)
         {
-            lcd_cmd(L_CLR);
-            lcd_cmd(L_L1);
-            lcd_str("P1 Win By Time!");
-            delay(15000);
+            is_active = win_display(true);
             return;
         }
         
         
-        int p1_minutes = player_1_time / 60;
-        int p1_seconds = player_1_time - (p1_minutes * 60);
+        unsigned int p1_minutes = player_1_time / 60;
+        unsigned int p1_seconds = player_1_time - (p1_minutes * 60);
         
-        int p2_minutes = player_2_time / 60;
-        int p2_seconds = player_2_time - (p2_minutes * 60);
+        unsigned int p2_minutes = player_2_time / 60;
+        unsigned int p2_seconds = player_2_time - (p2_minutes * 60);
         
-        char name_display[] = "    P1    P2    ";
+        char name_display[] = "    P1    P2    "; // display player name at top
         
-        char time_display[] = "                ";
-        time_display[3] = p1_minutes - (p1_minutes / 10 * 10) + '0';
-        time_display[4] = ':';
-        time_display[5] = p1_seconds/10 + '0';
-        time_display[6] = p1_seconds - (p1_seconds / 10 * 10) + '0';
+        char time_display[] = "                "; // time disp updated every 1s
+        time_display_update(time_display, player_1_time, player_2_time);
         
-        time_display[9] = p2_minutes - (p2_minutes / 10 * 10) + '0';
-        time_display[10] = ':';
-        time_display[11] = p2_seconds/10 + '0';
-        time_display[12] = p2_seconds - (p2_seconds / 10 * 10) + '0';
-        
-        if(dot_side && is_active)
+        if(dot_side && is_active) // side-to-side activity indicator
         {
-            name_display[0] = '#';
-            dot_side = !dot_side;
+            name_display[0] = 'o'; // enable on left side
+            dot_side = !dot_side; // bit flip to allow right side next time
         }
         else
         {
             if(is_active)
             {
-                name_display[15] = '#';
-                dot_side = !dot_side;  
+                name_display[15] = 'o'; // enable on right side
+                dot_side = !dot_side;   // bit flip again to allow left side
             }
         }
         
